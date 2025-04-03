@@ -1,0 +1,10 @@
+name = "Lean4MyLib"
+version = "0.1.0"
+defaultTargets = ["lean4mylib"]
+
+[[lean_lib]]
+name = "Lean4MyLib"
+
+[[lean_exe]]
+name = "lean4mylib"
+root = "Main"
