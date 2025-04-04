@@ -31,11 +31,6 @@ abbrev FileTree:=Tree FileS
 abbrev SFT:=StateM FileTree Unit
 
 -- これで確認して手動更新とする。
-#eval FileS.mk "sample" "12983b4fa3f6e96bfd80593bcbc9f216ad6af72ec1564cfde03d0d0e8abdc83d" "2025-03-24 02:10:39.331433608 +0900" (Src.localpath "") ""
-#shell "stat" "-c" "%y" "ShinamonTaskManager2/FileTracer.lean"
-#shell "sha256sum" "ShinamonTaskManager2/FileTracer.lean"
-
-def empty:SFT :=pure ()
-def file_tree:SFT :=do
-  add (FileS.mk "name" "hash" "date" (Src.localpath "") "") do
-    add (FileS.mk "name2" "hash" "date" (Src.localpath "") "") empty
+-- #eval FileS.mk "sample" "12983b4fa3f6e96bfd80593bcbc9f216ad6af72ec1564cfde03d0d0e8abdc83d" "2025-03-24 02:10:39.331433608 +0900" (Src.localpath "") ""
+-- #shell "stat" "-c" "%y" "ShinamonTaskManager2/FileTracer.lean"
+-- #shell "sha256sum" "ShinamonTaskManager2/FileTracer.lean"

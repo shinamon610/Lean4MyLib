@@ -9,7 +9,7 @@ open Lean Elab
 elab "#hello":command=>do
   logInfo "hello"
 
-#hello
+-- #hello
 
 
 elab "#shell_ls":command=>do
@@ -17,7 +17,7 @@ elab "#shell_ls":command=>do
   let output<-IO.Process.output spawn_args
   logInfo output.stdout
 
-#shell_ls
+-- #shell_ls
 
 elab "#shell" s:str+ :command => do
   let cmds:=s.map TSyntax.getString
@@ -26,8 +26,8 @@ elab "#shell" s:str+ :command => do
   let output<-IO.Process.output cmd
   logInfo output.stdout
 
-#shell "less" "flake.nix"
+-- #shell "less" "flake.nix"
 
 -- 参照している環境が違うっぽくて、普通にpythonってやっても見つけられない。
 -- 絶対パスだったらできる。
-#shell "/nix/store/r8kkr8s0cvzq2zky45agi83mgl6s0zc4-python3-3.12.9/bin/python" "a.py"
+-- #shell "/nix/store/r8kkr8s0cvzq2zky45agi83mgl6s0zc4-python3-3.12.9/bin/python" "a.py"
