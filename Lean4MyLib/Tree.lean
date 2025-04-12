@@ -44,3 +44,9 @@ def add {A:Type}(task:A) (body:StateM (Tree A) Unit):StateM (Tree A) Unit:=do
   let parent<-get
   let res <- (body.run (Tree.Node task []))
   set (Tree.Node (top parent) (res.snd::deps parent))
+
+def toposort_rev {A:Type} (tree:Tree A):List A:=
+  match tree with
+  | .Node a children => a::(children.foldl (fun x y => (toposort_rev y)++x) [])
+
+def toposort {A:Type} (tree:Tree A):List A:= (toposort_rev (tree)).reverse
