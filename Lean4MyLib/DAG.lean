@@ -21,7 +21,7 @@ def deps {A:Type}(tree:DAG A):List (DAG A):=
   match tree with
   | .Node _ list => list
 
-def find {A:Type} (condition:A->Bool) [BEq A][ToString A] (tree:DAG A):Option (DAG A):=
+def find {A:Type} (condition:A->Bool) (tree:DAG A):Option (DAG A):=
   inner_find [tree]
   where
     inner_find (trees:List (DAG A)):Option (DAG A):=
@@ -38,7 +38,7 @@ def find {A:Type} (condition:A->Bool) [BEq A][ToString A] (tree:DAG A):Option (D
           | none=>inner_find tails
           | _=>res
 
-def find! {A:Type} (condition:A->Bool) [BEq A][Inhabited A][ToString A] (tree:DAG A):DAG A:=(find condition tree).get!
+def find! {A:Type} (condition:A->Bool) [Inhabited A] (tree:DAG A):DAG A:=(find condition tree).get!
 
 def add {A:Type}(task:A) (body:StateM (DAG A) Unit):StateM (DAG A) Unit:=do
   let parent<-get
