@@ -1,9 +1,9 @@
-import Lean4MyLib.Tree
+import Lean4MyLib.DAG
 import Lean4MyLib.lean_shell
 import Std
 
 open Std
-open Tree
+open DAG
 
 namespace FileTracer
 /-
@@ -27,7 +27,7 @@ structure FileS where
   howToMake:String
 deriving Repr,Inhabited,BEq,Hashable
 
-abbrev FileTree:=Tree FileS
+abbrev FileTree:=DAG FileS
 abbrev SFT:=StateM FileTree Unit
 
 -- これで確認して手動更新とする。
