@@ -7,6 +7,11 @@ inductive DAG (A:Type) where
 | Node:A-> List (DAG A)->DAG A
 deriving Inhabited
 
+def DAG.size (dag:DAG A) : Nat :=
+  match dag with
+  | .Node _ children =>
+    1 + (children.map DAG.size).foldl Nat.max 0
+
 def str [ToString A]: (DAG A)->String
   | .Node a list=>
     let repr_a:=toString a
@@ -54,6 +59,12 @@ def toposort_rev {A:Type} (tree:DAG A):List A:=
 
 def toposort {A:Type} (tree:DAG A):List A:= (toposort_rev (tree)).reverse
 
+def dfsWithNum (dag:DAG A) (n:Nat): List (A×Nat):=
+  match dag with
+  | .Node a list =>
+    let res := List.flatMap (fun x=>dfsWithNum x (n+1)) list
+    (a, n)::res
+
 -- def has_root (target:StateT (DAG A) M B):Prop := (deps (exec target root)).length == 1
 -- (h: has_root parent )を引数に追加して証明したいが、append呼び出し側で使うのが難しいからやめた
 def append [Monad M][Inhabited A] (parent:StateT (DAG A) M Unit) (children:StateT (DAG A) M Unit) :StateT (DAG A) M Unit := do
@@ -68,3 +79,11 @@ def append [Monad M][Inhabited A] (parent:StateT (DAG A) M Unit) (children:State
   let cdag:DAG A <- execD children
   match (deps pdag).head! with
     | .Node p list => set $  DAG.Node p $ (deps cdag) ++ list
+
+def indent (n : Nat) (s : String) : String :=
+  let list := List.replicate n " "
+  (list.foldl (fun acc x=> x ++ acc) "⊢ ")++s
+
+def renderDAG [ToString A](dag:DAG A):IO Unit:=do
+  let res:=dfsWithNum dag 0
+  res.forM (fun (x, n) => println! indent n (toString x))
