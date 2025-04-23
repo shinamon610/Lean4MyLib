@@ -1,3 +1,6 @@
+import Lean4MyLib.MyState
+
+open MyState
 namespace DAG
 
 inductive DAG (A:Type) where
@@ -50,3 +53,18 @@ def toposort_rev {A:Type} (tree:DAG A):List A:=
   | .Node a children => a::(children.foldl (fun x y => (toposort_rev y)++x) [])
 
 def toposort {A:Type} (tree:DAG A):List A:= (toposort_rev (tree)).reverse
+
+-- def has_root (target:StateT (DAG A) M B):Prop := (deps (exec target root)).length == 1
+-- (h: has_root parent )を引数に追加して証明したいが、append呼び出し側で使うのが難しいからやめた
+def append [Monad M][Inhabited A] (parent:StateT (DAG A) M Unit) (children:StateT (DAG A) M Unit) :StateT (DAG A) M Unit := do
+  -- have hh: (deps (exec parent root)) ≠ [] := by
+  --   unfold has_root at h
+  --   intro h_nil
+  --   rw [h_nil] at h
+  --   contradiction
+
+  -- match (deps (exec parent root)).head hh with
+  let pdag:DAG A <- execD parent
+  let cdag:DAG A <- execD children
+  match (deps pdag).head! with
+    | .Node p list => set $  DAG.Node p $ (deps cdag) ++ list
