@@ -24,3 +24,5 @@ def zdt (year : Year.Offset) (month : Month.Ordinal) (day : Day.Ordinal)
         (hour : Hour.Ordinal:=0) (minute : Minute.Ordinal:=0) : ZonedDateTime :=
   let pdt := PlainDateTime.mk (PlainDate.ofYearMonthDayClip year month day) (PlainTime.ofHourMinuteSeconds hour minute 0)
   ZonedDateTime.ofPlainDateTimeWithZone pdt JST
+
+def Std.Time.ZonedDateTime.between  (target startDate endDate : ZonedDateTime)  : Bool := startDate <= target && target <= endDate
