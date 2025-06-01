@@ -1,14 +1,9 @@
-structure P where
-  a:Int
-  b:String
-deriving Repr
-
+import Lean
 -- 汎用テーブル表示用の型クラス
 class TableDisplay (α : Type) where
   getHeaders : List String
   getRow : α → List String
 
--- List用のToStringインスタンス（TableDisplayを使用）
 instance [TableDisplay α] : ToString (List α) where
   toString xs :=
     if xs.isEmpty then "Empty list"
@@ -42,13 +37,54 @@ instance [TableDisplay α] : ToString (List α) where
 instance [TableDisplay α] : Repr (List α) where
   reprPrec xs _ := toString xs
 
-instance : TableDisplay P where
-  getHeaders := ["a", "b"]
-  getRow p := [toString p.a, toString p.b]
+open Lean Elab Command Meta
 
-instance : TableDisplay Person where
-  getHeaders := ["name", "age","country"]
-  getRow p := [toString p.name, toString p.age, (repr p.country).pretty]
+elab "derive_table_for " id:ident : command => do
+  let structName := id.getId
+  let env <- getEnv
+
+  let fieldNames := Lean.getStructureFields env structName
+  let headerList := fieldNames.map fun n => Syntax.mkStrLit (toString n)
+
+  -- getHeaders の実装
+  let headersExpr ← `(term| [$(headerList),*])
+
+  -- getRow の実装
+  let rowExprs ← fieldNames.mapM fun fieldName => do
+    let fieldIdent := mkIdent fieldName
+    `(term| toString x.$fieldIdent:ident)
+  let rowExpr ← `(term| [$(rowExprs),*])
+
+  let instCmd ← `(command|
+    instance : TableDisplay $(mkIdent structName) where
+      getHeaders := $headersExpr
+      getRow x := $rowExpr
+  )
+
+  elabCommand instCmd
+
+namespace test
+structure P where
+  a:Int
+  b:String
+deriving Repr
+
+structure Country where
+  id : Int
+  name : String
+  isHoge : Bool
+deriving Repr
+instance : ToString Country where
+  toString country := reprStr country
+
+structure Person where
+  name : String
+  age : Int
+  country : Country
+deriving Repr
+
+derive_table_for test.P
+derive_table_for test.Person
 
 def ps:List P:= [⟨10,"c"⟩,⟨11,"bbb"⟩]
 #eval ps
