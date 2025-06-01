@@ -4,8 +4,7 @@ class TableDisplay (α : Type) where
   getHeaders : List String
   getRow : α → List String
 
-instance [TableDisplay α] : ToString (List α) where
-  toString xs :=
+def displayTable [TableDisplay α] (xs:List α) : String:=
     if xs.isEmpty then "Empty list"
     else
       let headers := TableDisplay.getHeaders (α := α)
@@ -34,8 +33,9 @@ instance [TableDisplay α] : ToString (List α) where
 
       header ++ "\n" ++ separator ++ (dataRows.foldl (fun acc row => acc ++ "\n" ++ row) "")
 
+-- Reprのinstanceにすることで、#evalしたときにdisplayTableで表示されるようにする
 instance [TableDisplay α] : Repr (List α) where
-  reprPrec xs _ := toString xs
+  reprPrec xs _ := displayTable xs
 
 open Lean Elab Command Meta
 
