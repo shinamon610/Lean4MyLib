@@ -46,7 +46,12 @@ instance : TableDisplay P where
   getHeaders := ["a", "b"]
   getRow p := [toString p.a, toString p.b]
 
+instance : TableDisplay Person where
+  getHeaders := ["name", "age","country"]
+  getRow p := [toString p.name, toString p.age, (repr p.country).pretty]
 
-def p:P:= ⟨10,"aaa"⟩
 def ps:List P:= [⟨10,"c"⟩,⟨11,"bbb"⟩]
 #eval ps
+
+def persons:List Person:=[⟨"a",10,⟨1,"aa",true⟩⟩,⟨"b",120,⟨2,"bb",true⟩⟩]
+#eval persons
