@@ -1,5 +1,6 @@
-
 import Std.Time
+import Lean
+open Lean
 open Std.Time
 
 instance :BEq ZonedDateTime where
@@ -26,3 +27,6 @@ def zdt (year : Year.Offset) (month : Month.Ordinal) (day : Day.Ordinal)
   ZonedDateTime.ofPlainDateTimeWithZone pdt JST
 
 def Std.Time.ZonedDateTime.between  (target startDate endDate : ZonedDateTime)  : Bool := startDate <= target && target <= endDate
+
+instance: ToJson ZonedDateTime where
+  toJson (time):Json := .mkObj [("date",time.toISO8601String)]
