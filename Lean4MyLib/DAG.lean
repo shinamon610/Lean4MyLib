@@ -91,7 +91,7 @@ private partial def inner_toJsonByLabel {A} [ToString A] [ToJson A] (g:SDAGWithF
       inner_toJsonByLabel g j
       )
   let base:= toJson (g.base.label i)
-  mkObj [ (k, base.mergeObj (mkObj [("deps", Json.arr deps.toArray)]))]
+  mkObj [ (k, base.mergeObj (mkObj [("1deps", Json.arr deps.toArray)]))] -- sort順指定のために 1を入れている
 
 def toJsonByLabel {A} [ToString A] [ToJson A] :DAGWithFilter A -> Json
 | ⟨_ , g⟩ =>
