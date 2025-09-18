@@ -108,17 +108,17 @@ def SDAG.ignoreOneElement {A n}
 private partial def inner_toJsonByLabel {A} [ToString A] [ToJson A] (g:SDAGWithFilter A n) (i:Fin n): Json:=
   let k : String := toString (g.base.label i)
   let deps : List Json :=
-    (g.base.children i).map (fun c =>
+    (g.children i).map (fun c =>
       let j := SDAG.coeChild i c
-      inner_toJsonByLabel g j
+      innerToJsonByLabel g j
       )
-  let base:= toJson (g.base.label i)
+  let base:= toJson (g.label i)
   mkObj [ (k, base.mergeObj (mkObj [("1deps", Json.arr deps.toArray)]))] -- sort順指定のために 1を入れている
 
-def toJsonByLabel {A} [ToString A] [ToJson A] :DAGWithFilter A -> Json
+def toJsonByLabel {A} [ToString A] [ToJson A] :DAG A -> Json
 | ⟨_ , g⟩ =>
-  let roots := (SDAG.roots g.base).filter g.allow
-  let entries : List Json := roots.map (inner_toJsonByLabel g)
+  let roots := (SDAG.roots g)
+  let entries : List Json := roots.map (innerToJsonByLabel g)
   Json.arr entries.toArray
 
 namespace DAG
