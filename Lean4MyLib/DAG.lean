@@ -83,6 +83,28 @@ def DAGWithFilter.of{A} : (d : DAG A) → (A×(Fin d.1) → Bool) → DAGWithFil
 | ⟨n, G⟩, pred =>
   ⟨n, { base := G, allow := fun i => pred ((G.label i), i)}⟩
 
+/-- i < j のとき `Fin i → Fin j` への持ち上げ -/
+private def liftTo {n} {i j : Fin n} (h : i.val < j.val) (c : Fin i) : Fin j :=
+  ⟨c.val, Nat.lt_trans c.isLt h⟩
+
+def SDAG.ignoreOneElement {A n}
+  (g : SDAG A n) (target : Fin n) : SDAG A n :=
+{ label := g.label,
+  children := fun fin =>
+    if h : ∃ c : Fin fin, coeChild fin c = target then
+      let c  : Fin fin := Classical.choose h
+      have hc : SDAG.coeChild fin c = target := Classical.choose_spec h
+      have hval : target.val = c.val := by
+        have h':= congrArg Fin.val hc
+        simp [coeChild] at h'
+        exact h'.symm
+      have hlt  : target.val < fin.val := by simp [hval]
+      let up : Fin target → Fin fin := fun d => liftTo hlt d
+      (g.children fin ++ (g.children target).map up).filter (fun x => coeChild fin x != target)
+    else
+      g.children fin }
+
+
 private partial def inner_toJsonByLabel {A} [ToString A] [ToJson A] (g:SDAGWithFilter A n) (i:Fin n): Json:=
   let k : String := toString (g.base.label i)
   let deps : List Json :=
