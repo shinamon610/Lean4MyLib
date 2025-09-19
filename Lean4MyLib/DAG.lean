@@ -487,13 +487,44 @@ private def toState {A} {n} (g : SDAG A n) : State A :=
     Array.ofFn (fun (i : Fin n) => (g.children i).map (fun c => (c : Fin i).val))
   { labels := labels, kids := kids }
 
+/-- 不許可ノードを通過して，子を許可ノードに張り替える（多段通過も一発） -/
+private def bypassKids (kids : Array (List Nat)) (allow : Array Bool) : Array (List Nat) :=
+  Id.run do
+    let n := kids.size
+    let mut dp : Array (List Nat) := Array.mkEmpty n
+    -- i の子は < i なので，0→n-1 の順で dp を確定していけば参照は常に過去要素で完結
+    for i in [0:n] do
+      let raw := kids[i]!
+      let expanded : List Nat :=
+        raw.flatMap (fun k => if allow[k]! then [k] else dp[k]!)
+      dp := dp.push expanded
+    pure dp
+
 /-- State 上で圧縮を完了し，最後に freeze で DAG へ戻す -/
 def compressViaState {A} [Inhabited A] (wf : DAGWithFilter A) : DAG A :=
   match wf with
   | ⟨n, s⟩ =>
-    let st0 : State A := toState s.base
+    let st0 : State A :=
+      let labels := Array.ofFn (fun (i : Fin n) => s.base.label i)
+      let kids   := Array.ofFn (fun (i : Fin n) => (s.base.children i).map (fun c => (c : Fin i).val))
+      { labels := labels, kids := kids }
+
     let allow : Array Bool := Array.ofFn (fun (i : Fin n) => s.allow i)
-    let (omap, m) := buildMap allow
+
+    -- ここで一度だけバイパス展開
+    let bridgedKids := bypassKids st0.kids allow
+
+    -- allow に基づく位置圧縮マップ
+    let (omap, m) :=
+      Id.run do
+        let mut idx := 0
+        let mut m   := Array.mkEmpty allow.size
+        for a in allow do
+          if a then m := m.push (some idx); idx := idx + 1
+          else       m := m.push none
+        pure (m, idx)
+
+    -- 新配列を一括構築（ラベルは許可のみ，子は bridged → old→new で再マップ）
     let newLabels :=
       Id.run do
         let mut acc := Array.mkEmpty m
@@ -508,12 +539,12 @@ def compressViaState {A} [Inhabited A] (wf : DAGWithFilter A) : DAG A :=
         for i in List.finRange n do
           match omap[i.val]! with
           | some _ =>
-              let ks := (st0.kids[i.val]!).filterMap (fun k => omap[k]!)
+              let ks := (bridgedKids[i.val]!).filterMap (fun k => omap[k]!)
               acc := acc.push ks
           | none   => pure ()
         pure acc
-    let st1 : State A := { labels := newLabels, kids := newKids }
-    freeze st1
+
+    freeze { labels := newLabels, kids := newKids }
 
 end DAGWithFilter
 
@@ -538,7 +569,7 @@ def tinySDAG : SDAG String 5 where
 
 def mkWF : DAGWithFilter String :=
   let dag := ⟨5, tinySDAG⟩
-  let pred:= fun (_, i) => i != 2
+  let pred:= fun (_, i) => i != 2 && i != 3
   DAGWithFilter.of dag pred
 
 def run [ToJson A] [ToString A][Inhabited A](wf:DAGWithFilter A) : String :=
