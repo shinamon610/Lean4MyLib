@@ -370,7 +370,7 @@ def tinySDAG : SDAG String 5 where
 
 def mkWF : DAGWithFilter String :=
   let dag := ⟨5, tinySDAG⟩
-  let pred:= fun (_, i) => i != 3 && i != 2
+  let pred:= fun (_, i) => i != 2
   DAGWithFilter.of dag pred
 
 def run [ToJson A] [ToString A](wf:DAGWithFilter A) : String :=
@@ -516,3 +516,35 @@ def compressViaState {A} [Inhabited A] (wf : DAGWithFilter A) : DAG A :=
     freeze st1
 
 end DAGWithFilter
+
+namespace TestCompressViaState
+
+open SDAG
+open DAGWithFilter
+
+def tinySDAG : SDAG String 5 where
+  label
+    | ⟨0, _⟩ => "C"
+    | ⟨1, _⟩ => "E"
+    | ⟨2, _⟩ => "B"
+    | ⟨3, _⟩ => "A"
+    | ⟨4, _⟩ => "D"
+  children
+    | ⟨0, _⟩ => []
+    | ⟨1, _⟩ => []
+    | ⟨2, _⟩ => [⟨0, by simp⟩,⟨1, by simp⟩]
+    | ⟨3, _⟩ => [⟨2, by simp⟩]
+    | ⟨4, _⟩ => [⟨2, by simp⟩]
+
+def mkWF : DAGWithFilter String :=
+  let dag := ⟨5, tinySDAG⟩
+  let pred:= fun (_, i) => i != 2
+  DAGWithFilter.of dag pred
+
+def run [ToJson A] [ToString A][Inhabited A](wf:DAGWithFilter A) : String :=
+  let dag := DAGWithFilter.compressViaState wf
+  (toJsonByLabel dag).pretty
+
+#eval IO.println (run mkWF)
+
+end TestCompressViaState
