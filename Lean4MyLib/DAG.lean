@@ -77,19 +77,15 @@ def «隣接行列表示» {A n} [Repr A] (g : SDAG A n) : String :=
         s!"{(j : Nat)}:{reprStr (g.label j)}")
       s!"{nodeStr i} -> [{joinSep ", " kids}]")
   joinSep "\n" lines
-end SDAG
-
-def DAGWithFilter.of{A} : (d : DAG A) → (A×(Fin d.1) → Bool) → DAGWithFilter A
-| ⟨n, G⟩, pred =>
-  ⟨n, { base := G, allow := fun i => pred ((G.label i), i)}⟩
 
 /-- i < j のとき `Fin i → Fin j` への持ち上げ -/
 private def liftTo {n} {i j : Fin n} (h : i.val < j.val) (c : Fin i) : Fin j :=
   ⟨c.val, Nat.lt_trans c.isLt h⟩
 
-def SDAG.ignoreOneElement {A n}
+def ignoreOne {A n}
   (g : SDAG A n) (target : Fin n) : SDAG A n :=
-{ label := g.label,
+{
+  label := g.label,
   children := fun fin =>
     if h : ∃ c : Fin fin, coeChild fin c = target then
       let c  : Fin fin := Classical.choose h
@@ -102,11 +98,60 @@ def SDAG.ignoreOneElement {A n}
       let up : Fin target → Fin fin := fun d => liftTo hlt d
       (g.children fin ++ (g.children target).map up).filter (fun x => coeChild fin x != target)
     else
-      g.children fin }
+      g.children fin
+}
+
+/-- `ignoreOneElement` 済みの `target` を物理削除して `n-1` に詰める。--/
+def compressOne {A} {n : Nat} (g : SDAG A n) (target : Fin n) : SDAG A (n - 1) :=
+by
+  classical
+  -- 新しい添字 i' を元の添字へ戻す写像
+  let oldOf : Fin (n - 1) → Fin n :=
+    fun i' =>
+      if h : i'.val < target.val then
+        ⟨i'.val, by
+          -- i' < target < n
+          exact sorry⟩
+      else
+        ⟨i'.val + 1, by
+          -- target ≤ i' < n-1+? ⇒ i'+1 < n
+          exact sorry⟩
+  -- 元の添字を新しい添字へ送る写像（target は落とす）
+  let toNew : Fin n → Option (Fin (n - 1)) :=
+    fun i =>
+      if hlt : i.val < target.val then
+        some ⟨i.val, by
+          -- i < target ≤ n-1
+          exact sorry⟩
+      else if heq : i = target then
+        none
+      else
+        some ⟨i.val - 1, by
+          -- target < i < n ⇒ i-1 < n-1
+          exact sorry⟩
+  refine
+  { label := fun i' => g.label (oldOf i'),
+    children := fun i' =>
+      let j := oldOf i'
+      (g.children j).filterMap (fun c =>
+        let old := SDAG.coeChild j c          -- : Fin n
+        match toNew old with
+        | none      => none
+        | some new =>
+          -- new < i' （順序保存性）を示して局所添字へ落とす
+          have hlt : new.val < i'.val := by
+            -- ここは `c.isLt` と `oldOf` / `toNew` の場合分けから従う
+            exact sorry
+          some (Fin.castLT new hlt)) }
+end SDAG
+
+def DAGWithFilter.of{A} : (d : DAG A) → (A×(Fin d.1) → Bool) → DAGWithFilter A
+| ⟨n, G⟩, pred =>
+  ⟨n, { base := G, allow := fun i => pred ((G.label i), i)}⟩
 
 
-private partial def inner_toJsonByLabel {A} [ToString A] [ToJson A] (g:SDAGWithFilter A n) (i:Fin n): Json:=
-  let k : String := toString (g.base.label i)
+private partial def innerToJsonByLabel {A} [ToString A] [ToJson A] (g:SDAG A n) (i:Fin n): Json:=
+  let k : String := toString (g.label i)
   let deps : List Json :=
     (g.children i).map (fun c =>
       let j := SDAG.coeChild i c
