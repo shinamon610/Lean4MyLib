@@ -332,6 +332,8 @@ match dagwf with
   let ⟨m, compressed⟩ := go ignored unallowed0
   ⟨m, compressed⟩
 
+
+
 private partial def innerToJsonByLabel {A} [ToString A] [ToJson A] (g:SDAG A n) (i:Fin n): Json:=
   let k : String := toString (g.label i)
   let deps : List Json :=
@@ -347,6 +349,52 @@ def toJsonByLabel {A} [ToString A] [ToJson A] :DAG A -> Json
   let roots := (SDAG.roots g)
   let entries : List Json := roots.map (innerToJsonByLabel g)
   Json.arr entries.toArray
+
+-- 最小テスト: 2ノード(1→0)。ノード0を不許可にして `compress` で削除。
+-- 期待: 残るのは元1のみ。表示は `0:1 -> []`。
+namespace TestCompress
+
+open SDAG
+
+def tinySDAG : SDAG String 5 where
+  label
+    | ⟨0, _⟩ => "C"
+    | ⟨1, _⟩ => "E"
+    | ⟨2, _⟩ => "B"
+    | ⟨3, _⟩ => "A"
+    | ⟨4, _⟩ => "D"
+  children
+    | ⟨0, _⟩ => []
+    | ⟨1, _⟩ => []
+    | ⟨2, _⟩ => [⟨0, by simp⟩,⟨1, by simp⟩]
+    | ⟨3, _⟩ => [⟨2, by simp⟩]
+    | ⟨4, _⟩ => [⟨2, by simp⟩]
+
+def mkWF : DAGWithFilter String :=
+  let dag := ⟨5, tinySDAG⟩
+  let pred:= fun (_, i) => i != 3 && i != 2
+  DAGWithFilter.of dag pred
+
+def run [ToJson A] [ToString A](wf:DAGWithFilter A) : String :=
+  let dag := DAGWithFilter.compress wf
+  (toJsonByLabel dag).pretty
+
+#eval IO.println (run mkWF)
+
+-- 負荷テスト
+def makeSDAG (n : Nat) : SDAG Nat n where
+  label
+    | ⟨i, _⟩ => i
+  children
+    | ⟨_, _⟩ =>[]
+
+def mkWF50 : DAGWithFilter Nat :=
+  let dag := ⟨100, makeSDAG 100⟩
+  let pred:= fun (_, i) =>  i == 1 || i== 2 || i== 3 || i==5 || i==6
+  DAGWithFilter.of dag pred
+
+#eval IO.println (run mkWF50)
+end TestCompress
 
 namespace DAG
 /-- `DAG` 版のラッパ -/
