@@ -304,6 +304,34 @@ def DAGWithFilter.of{A} : (d : DAG A) → (A×(Fin d.1) → Bool) → DAGWithFil
   ⟨n, { base := G, allow := fun i => pred ((G.label i), i)}⟩
 
 
+partial def DAGWithFilter.compress (dagwf : DAGWithFilter A) : DAG A :=
+match dagwf with
+| ⟨n, sdagwf⟩ =>
+  let unallowed0 : List (Fin n) :=
+    (List.finRange n).filter (fun i => !(sdagwf.allow i))
+  -- ignore はサイズ不変なので foldl でよい
+  let ignored : SDAG A n :=
+    unallowed0.foldl (fun acc fin => acc.ignoreOne fin) sdagwf.base
+  -- サイズ可変の圧縮を List 上で再帰
+  let rec go {m : Nat} (acc : SDAG A m) :
+      List (Fin m) → Σ k, SDAG A k
+    | [] => ⟨m, acc⟩
+    | t :: ts =>
+      -- 次の圧縮後に残リストの添字を m → m-1 へ写す
+      let toNew : Fin m → Option (Fin (m - 1)) :=
+        fun i =>
+          if hlt : i.val < t.val then
+            some ⟨i.val, by exact lt_of_lt_of_le hlt (SDAG.val_le_pred_of_fin t)⟩
+          else if heq : i = t then
+            none
+          else
+            some ⟨i.val - 1, by exact SDAG.pred_bound_for_else (hlt := hlt) (hne := heq)⟩
+      let acc' := acc.compressOne t
+      let ts'  := ts.filterMap toNew     -- t を落とし、以降をデクリメント
+      go acc' ts'
+  let ⟨m, compressed⟩ := go ignored unallowed0
+  ⟨m, compressed⟩
+
 private partial def innerToJsonByLabel {A} [ToString A] [ToJson A] (g:SDAG A n) (i:Fin n): Json:=
   let k : String := toString (g.label i)
   let deps : List Json :=
