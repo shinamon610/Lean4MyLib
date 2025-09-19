@@ -332,8 +332,6 @@ match dagwf with
   let ⟨m, compressed⟩ := go ignored unallowed0
   ⟨m, compressed⟩
 
-
-
 private partial def innerToJsonByLabel {A} [ToString A] [ToJson A] (g:SDAG A n) (i:Fin n): Json:=
   let k : String := toString (g.label i)
   let deps : List Json :=
@@ -465,3 +463,56 @@ private def freeze {A} (s : State A) : DAG A :=
     panic! s!"internal size mismatch: labels={n}, kids={s.kids.size}"
 
 def mkDAG {A} (prog : SSA A B) : DAG A :=  (prog.run State.empty).snd |> freeze
+
+namespace DAGWithFilter
+
+open SDAG
+
+/-- allow配列から old→new を作る（許可のみ連番） -/
+private def buildMap (allow : Array Bool) : Array (Option Nat) × Nat :=
+  Id.run do
+    let mut idx := 0
+    let mut m   := Array.mkEmpty allow.size
+    for a in allow do
+      if a then
+        m := m.push (some idx); idx := idx + 1
+      else
+        m := m.push none
+    pure (m, idx)
+
+/-- SDAG → State コピー（証明は持たない） -/
+private def toState {A} {n} (g : SDAG A n) : State A :=
+  let labels : Array A := Array.ofFn (fun (i : Fin n) => g.label i)
+  let kids   : Array (List Nat) :=
+    Array.ofFn (fun (i : Fin n) => (g.children i).map (fun c => (c : Fin i).val))
+  { labels := labels, kids := kids }
+
+/-- State 上で圧縮を完了し，最後に freeze で DAG へ戻す -/
+def compressViaState {A} [Inhabited A] (wf : DAGWithFilter A) : DAG A :=
+  match wf with
+  | ⟨n, s⟩ =>
+    let st0 : State A := toState s.base
+    let allow : Array Bool := Array.ofFn (fun (i : Fin n) => s.allow i)
+    let (omap, m) := buildMap allow
+    let newLabels :=
+      Id.run do
+        let mut acc := Array.mkEmpty m
+        for i in List.finRange n do
+          match omap[i.val]! with
+          | some _ => acc := acc.push (st0.labels[i.val]!)
+          | none   => pure ()
+        pure acc
+    let newKids :=
+      Id.run do
+        let mut acc := Array.mkEmpty m
+        for i in List.finRange n do
+          match omap[i.val]! with
+          | some _ =>
+              let ks := (st0.kids[i.val]!).filterMap (fun k => omap[k]!)
+              acc := acc.push ks
+          | none   => pure ()
+        pure acc
+    let st1 : State A := { labels := newLabels, kids := newKids }
+    freeze st1
+
+end DAGWithFilter
