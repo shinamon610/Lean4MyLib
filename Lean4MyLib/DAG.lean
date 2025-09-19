@@ -101,7 +101,157 @@ def ignoreOne {A n}
       g.children fin
 }
 
-/-- `ignoreOneElement` 済みの `target` を物理削除して `n-1` に詰める。--/
+theorem lt_of_lt_targetVal {n} (target : Fin n) {k : Nat}
+  (h : k < target.val) : k < n :=
+Nat.lt_trans h target.isLt
+
+theorem pos_of_fin_pred {n} (i' : Fin (n - 1)) : 0 < n :=
+by
+  have h0 : 0 ≤ i'.val := Nat.zero_le _
+  have h1 : 0 < n - 1 := lt_of_le_of_lt h0 i'.isLt
+  exact lt_of_lt_of_le h1 (Nat.sub_le _ _)
+
+theorem sub_one_lt {n : Nat} (hn : 0 < n) : n - 1 < n :=
+by
+  cases n with
+  | zero => cases hn
+  | succ n' =>
+      simp [Nat.add_one_sub_one, Nat.lt_add_one]
+
+/-- `i' : Fin (n-1)` なら `i'.val + 1 < n`. -/
+theorem add_one_lt_of_fin_pred {n} (i' : Fin (n - 1)) : i'.val + 1 < n :=
+by
+  have h1 : i'.val + 1 ≤ n - 1 := Nat.succ_le_of_lt i'.isLt
+  have h2 : n - 1 < n := sub_one_lt (pos_of_fin_pred i')
+  exact lt_of_le_of_lt h1 h2
+
+theorem val_le_pred_of_fin {n} (t : Fin n) : t.val ≤ n - 1 := by
+  cases n with
+  | zero => cases t with
+      | mk val hlt => cases (Nat.not_lt_zero _ hlt)
+  | succ m =>
+      have : t.val ≤ m := Nat.le_of_lt_succ t.isLt
+      simpa using this
+theorem val_ne_of_ne {n} {i j : Fin n} (hne : i ≠ j) : i.val ≠ j.val :=
+by
+  intro h
+  exact hne (Fin.ext h)
+theorem pred_lt_pred_of_lt_of_pos {i n : Nat}
+  (hi : i < n) (ipos : 0 < i) : i - 1 < n - 1 :=
+by
+  cases i with
+  | zero => cases ipos
+  | succ k =>
+    cases n with
+    | zero => cases hi
+    | succ m =>
+      have hk : k < m := Nat.succ_lt_succ_iff.mp hi
+      simpa using hk
+
+theorem pred_bound_for_else {n} {i target : Fin n}
+  (hlt : ¬ i.val < target.val) (hne : i ≠ target) : i.val - 1 < n - 1 :=
+by
+  -- target.val ≤ i.val
+  have hge : target.val ≤ i.val := le_of_not_gt hlt
+  -- target.val ≠ i.val
+  have hneq_val : target.val ≠ i.val := by
+    intro h; exact hne (by simpa using (Fin.ext h).symm)
+  -- target.val < i.val
+  have htlt : target.val < i.val := lt_of_le_of_ne hge hneq_val
+  -- 0 < i.val
+  have hipos : 0 < i.val := lt_of_le_of_lt (Nat.zero_le _) htlt
+  -- i.val < n
+  have hin : i.val < n := i.isLt
+  -- そのまま適用
+  exact pred_lt_pred_of_lt_of_pos hin hipos
+
+/-- `toNew old = some new` と `old.val < (oldOf i').val` から `new.val < i'.val`。 -/
+theorem toNew_val_lt_of_child
+  {n : Nat} (target : Fin n) {i' : Fin (n - 1)}
+  {old : Fin n} {new : Fin (n - 1)}
+  (oldOf : Fin (n - 1) → Fin n)
+  (toNew : Fin n → Option (Fin (n - 1)))
+  (hOld : ∀ j : Fin (n - 1),
+    oldOf j =
+      (if h : j.val < target.val then
+         ⟨j.val, lt_of_lt_targetVal target h⟩
+       else
+         ⟨j.val + 1, add_one_lt_of_fin_pred j⟩))
+  (hNew : ∀ i : Fin n,
+    toNew i =
+      (if hlt : i.val < target.val then
+         some ⟨i.val, lt_of_lt_of_le hlt (val_le_pred_of_fin target)⟩
+       else if heq : i = target then
+         none
+       else
+         some ⟨i.val - 1, pred_bound_for_else (hlt := hlt) (hne := heq)⟩))
+  (hchild : old.val < (oldOf i').val)
+  (hSome : toNew old = some new)
+  : new.val < i'.val := by
+  have hOld' := hOld i'
+  have hNew' := hNew old
+  by_cases hi : i'.val < target.val
+  · have hchild' : old.val < i'.val := by
+      simpa [hOld', hi] using hchild
+    by_cases hold_lt : old.val < target.val
+    · -- 第1枝: new.val = old.val
+      have hs :
+          some new
+            = some ⟨old.val, lt_of_lt_of_le hold_lt (val_le_pred_of_fin target)⟩ := by
+        simpa [hNew', hold_lt] using hSome.symm
+      have hnew_eq :
+          new = ⟨old.val, lt_of_lt_of_le hold_lt (val_le_pred_of_fin target)⟩ :=
+        Option.some.inj hs
+      have hval : new.val = old.val := by
+        simpa using congrArg Fin.val hnew_eq
+      simpa [hval] using hchild'
+    · -- 不可能枝（`old ≥ target > i'` が `old < i'` と矛盾）
+      have : old.val < target.val := lt_trans hchild' hi
+      exact (hold_lt this).elim
+  · -- `target.val ≤ i'.val`
+    have hi_ge : target.val ≤ i'.val := le_of_not_gt hi
+    have hchild' : old.val < i'.val + 1 := by
+      simpa [hOld', hi] using hchild
+    have hold_le_i' : old.val ≤ i'.val := Nat.lt_succ_iff.mp hchild'
+    by_cases hold_lt : old.val < target.val
+    · -- 第1枝: new.val = old.val
+      have hs :
+          some new
+            = some ⟨old.val, lt_of_lt_of_le hold_lt (val_le_pred_of_fin target)⟩ := by
+        simpa [hNew', hold_lt] using hSome.symm
+      have hnew_eq :
+          new = ⟨old.val, lt_of_lt_of_le hold_lt (val_le_pred_of_fin target)⟩ :=
+        Option.some.inj hs
+      have hval : new.val = old.val := by
+        simpa using congrArg Fin.val hnew_eq
+      have : old.val < i'.val := lt_of_lt_of_le hold_lt hi_ge
+      simpa [hval] using this
+    · -- `old ≥ target`
+      by_cases heq : old = target
+      · subst heq; simp [hNew'] at hSome
+      · -- 第3枝: new.val = old.val - 1
+        have hs :
+            some new
+              = some ⟨old.val - 1, pred_bound_for_else (hlt := hold_lt) (hne := heq)⟩ := by
+          simpa [hNew', hold_lt, heq] using hSome.symm
+        have hnew_eq :
+            new = ⟨old.val - 1, pred_bound_for_else (hlt := hold_lt) (hne := heq)⟩ :=
+          Option.some.inj hs
+        have hval : new.val = old.val - 1 := by
+          simpa using congrArg Fin.val hnew_eq
+        -- まず `0 < old.val`
+        have hold_pos : 0 < old.val := by
+          by_cases htz : target.val = 0
+          · have hne0 : old.val ≠ 0 := by
+              intro hz; apply heq; apply Fin.ext; simp [hz, htz]
+            exact Nat.pos_of_ne_zero hne0
+          · have htpos : 0 < target.val := Nat.pos_of_ne_zero htz
+            exact lt_of_lt_of_le htpos (le_of_not_gt hold_lt)
+        -- `old.val - 1 < old.val`
+        have hpred_lt_old : old.val - 1 < old.val := by simpa using Nat.pred_lt (ne_of_gt hold_pos)
+        have : old.val - 1 < i'.val := lt_of_lt_of_le hpred_lt_old hold_le_i'
+        simpa [hval] using this
+
 def compressOne {A} {n : Nat} (g : SDAG A n) (target : Fin n) : SDAG A (n - 1) :=
 by
   classical
@@ -109,40 +259,44 @@ by
   let oldOf : Fin (n - 1) → Fin n :=
     fun i' =>
       if h : i'.val < target.val then
-        ⟨i'.val, by
-          -- i' < target < n
-          exact sorry⟩
+        ⟨i'.val, by exact lt_of_lt_targetVal target h⟩
       else
-        ⟨i'.val + 1, by
-          -- target ≤ i' < n-1+? ⇒ i'+1 < n
-          exact sorry⟩
+        ⟨i'.val + 1, by exact add_one_lt_of_fin_pred i'⟩
   -- 元の添字を新しい添字へ送る写像（target は落とす）
   let toNew : Fin n → Option (Fin (n - 1)) :=
     fun i =>
       if hlt : i.val < target.val then
-        some ⟨i.val, by
-          -- i < target ≤ n-1
-          exact sorry⟩
+        some ⟨i.val,by exact lt_of_lt_of_le hlt (val_le_pred_of_fin target)⟩
       else if heq : i = target then
         none
       else
-        some ⟨i.val - 1, by
-          -- target < i < n ⇒ i-1 < n-1
-          exact sorry⟩
+        some ⟨i.val - 1, by exact pred_bound_for_else (hlt := hlt) (hne := heq)⟩
   refine
   { label := fun i' => g.label (oldOf i'),
     children := fun i' =>
       let j := oldOf i'
       (g.children j).filterMap (fun c =>
         let old := SDAG.coeChild j c          -- : Fin n
-        match toNew old with
+        match hSome : toNew old with
         | none      => none
         | some new =>
-          -- new < i' （順序保存性）を示して局所添字へ落とす
-          have hlt : new.val < i'.val := by
-            -- ここは `c.isLt` と `oldOf` / `toNew` の場合分けから従う
-            exact sorry
-          some (Fin.castLT new hlt)) }
+          have hchild : old.val < (oldOf i').val := by
+            -- c.isLt : coeChild j c).val < j.val を持っているはず
+            -- j = oldOf i' なので書き換え
+            simp [old, j, SDAG.coeChild]
+
+          have hlt :
+              new.val < i'.val :=
+            toNew_val_lt_of_child
+              (target := target) (i' := i') (old := old) (new := new)
+              oldOf toNew
+              (by intro j; rfl)            -- hOld
+              (by intro i; rfl)            -- hNew
+              hchild                        -- old.val < (oldOf i').val
+              hSome                        -- toNew old = some new
+          some (Fin.castLT new hlt)
+      )
+  }
 end SDAG
 
 def DAGWithFilter.of{A} : (d : DAG A) → (A×(Fin d.1) → Bool) → DAGWithFilter A
