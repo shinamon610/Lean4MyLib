@@ -1,6 +1,4 @@
 import Std
-import Lean.Util.FoldConsts
-import Mathlib.Data.Fin.Basic
 import Lean
 
 open Lean
@@ -136,7 +134,10 @@ private def freeze {A} (s : State A) : DAG A :=
     | some i => panic! s!"invalid child index at node {i.val}"
     | none   =>
       -- SDAG 構築
-      let label : Fin n → A := fun i => s.labels[i]
+      let label : Fin n → A :=
+        fun i => s.labels[i]'(by
+          -- n = s.size, State.size = s.labels.size
+          simp [State.size, n])
       let children : (i : Fin n) → List (Fin i) :=
         fun i =>
           let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
