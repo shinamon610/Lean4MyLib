@@ -60,7 +60,7 @@ def parents {A n} (g : SDAG A n) (j : Fin n) : List (Fin n) :=
 -- 先祖全部
 partial def ancestors {A n} (g : SDAG A n) (j : Fin n) : List (Fin n) :=
   let ps := g.parents j
-  ps.flatMap (fun x => g.ancestors x)
+  ps ++ ps.flatMap (fun x => g.ancestors x)
 end SDAG
 
 def DAGWithFilter.of{A} : (d : DAG A) → (A×(Fin d.1) → Bool) → DAGWithFilter A
