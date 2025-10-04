@@ -103,12 +103,12 @@ private def okKids (n : Nat) (ks : List Nat) : Bool :=
 def push {A} (a : A) (ks : List Nat := []) : SSA A Nat := do
   let s ← get
   let n := s.size
-  set { s with labels := s.labels.push a, kids := s.kids.push ks }
+  set { labels := s.labels.push a, kids := s.kids.push ks :State A}
   pure n
 
 def pushU {A} (a : A) (ks : List Nat := []) : SSA A Unit := do
   let s ← get
-  set { s with labels := s.labels.push a, kids := s.kids.push ks }
+  set {  labels := s.labels.push a, kids := s.kids.push ks :State A}
 
 def pushDailyU {A} (a : A) (ks : List Nat := []) (should_append:Bool): SSA A Unit := do
   if should_append
