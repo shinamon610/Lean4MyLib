@@ -100,19 +100,20 @@ private def okKids (n : Nat) (ks : List Nat) : Bool :=
   ks.all (fun k => decide (k < n))
 
 -- ノード追加用の関数
-def push {A} (a : A) (ks : List Nat := []) : SSA A Nat := do
+def push {A} (a : A) (ks : SSA A Nat := pure default) (refs:  List Nat := []) : SSA A Nat := do
+  let ksn <- ks
   let s ← get
   let n := s.size
-  set { labels := s.labels.push a, kids := s.kids.push ks :State A}
+  let refs_with_ks := ksn::refs
+  set { labels := s.labels.push a, kids := s.kids.push refs_with_ks :State A}
   pure n
 
-def pushU {A} (a : A) (ks : List Nat := []) : SSA A Unit := do
-  let s ← get
-  set {  labels := s.labels.push a, kids := s.kids.push ks :State A}
+def pushU {A} (a : A) (ks : SSA A Nat := pure default) (refs:  List Nat := []) : SSA A Unit := do
+  _ <- push a ks refs
 
-def pushDailyU {A} (a : A) (ks : List Nat := []) (should_append:Bool): SSA A Unit := do
+def pushDailyU {A} (a : A) (ks : SSA A Nat := pure default) (refs:  List Nat := []) (should_append:Bool): SSA A Unit := do
   if should_append
-  then pushU a ks
+  then pushU a ks refs
   else return ()
 
 private def freeze {A} (s : State A) : DAG A :=
