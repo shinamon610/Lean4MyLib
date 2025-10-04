@@ -100,18 +100,18 @@ private def okKids (n : Nat) (ks : List Nat) : Bool :=
   ks.all (fun k => decide (k < n))
 
 -- ノード追加用の関数
-def push {A} (a : A) (ks : SSA A Nat := pure default) (refs:  List Nat := []) : SSA A Nat := do
-  let ksn <- ks
+def push {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) : SSA A Nat := do
+  let ksn <- ks.mapM id
   let s ← get
   let n := s.size
-  let refs_with_ks := ksn::refs
+  let refs_with_ks := ksn++refs
   set { labels := s.labels.push a, kids := s.kids.push refs_with_ks :State A}
   pure n
 
-def pushU {A} (a : A) (ks : SSA A Nat := pure default) (refs:  List Nat := []) : SSA A Unit := do
+def pushU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) : SSA A Unit := do
   _ <- push a ks refs
 
-def pushDailyU {A} (a : A) (ks : SSA A Nat := pure default) (refs:  List Nat := []) (should_append:Bool): SSA A Unit := do
+def pushDailyU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) (should_append:Bool): SSA A Unit := do
   if should_append
   then pushU a ks refs
   else return ()
