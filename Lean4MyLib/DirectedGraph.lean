@@ -19,6 +19,18 @@ sizeは存在しないけど、定義域の濃度は等しい。
 
 また、これがlabelとかkidsにArrayを使っていない理由でもある。単なるArrayだとその間の要素に空きがある可能性が発生する。
 -/
+abbrev PackedDirectedGraph  (A : Type) := Σ n, DirectedGraph A n
+namespace DirectedGraph
+def empty (A : Type) : DirectedGraph A 0 where
+  label    i := nomatch i
+  kids i := nomatch i
+end DirectedGraph
+namespace PackedDirectedGraph
+def empty (A : Type) : PackedDirectedGraph A :=
+  ⟨0, DirectedGraph.empty A⟩
+instance (A : Type) : Inhabited (PackedDirectedGraph A) where
+  default := empty A
+end PackedDirectedGraph
 
 structure DAG (A : Type) (n : Nat) where
   label    : Fin n → A
@@ -146,6 +158,32 @@ private def toPackedDAG {A} (s : UnverifiedDirectedGraph A) : PackedDAG A :=
   else
     panic! s!"internal size mismatch: labels={n}, kids={s.kids.size}"
 
+private def toPackedDirectedGraph {A} (s : UnverifiedDirectedGraph A) : PackedDirectedGraph A :=
+  let n := s.size
+  -- kids の長さと n を突き合わせる
+  if hk : s.kids.size = n then
+    let bad? : Option (Fin n) :=
+      Id.run do
+        let mut bad : Option (Fin n) := none
+        for i in List.finRange n do
+          let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
+          if ! okKids n raw then
+            bad := some i
+        pure bad
+    match bad? with
+    | some i => panic! s!"invalid child index at node {i.val}"
+    | none =>
+      -- DirectedGraph 構築
+      let label : Fin n → A :=
+        fun i => s.labels[i]'(by
+          simp [UnverifiedDirectedGraph.size, n])
+      let kids : (i : Fin n) → List (Fin n) := fun i =>
+        let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
+        raw.filterMap (fun k =>
+        if hkn : k < n then some ⟨k, hkn⟩ else none)
+      ⟨n, { label, kids }⟩
+  else
+    panic! s!"internal size mismatch: labels={n}, kids={s.kids.size}"
 end UnverifiedDirectedGraph
 
 abbrev SSA (A : Type) := StateM (UnverifiedDirectedGraph A)
