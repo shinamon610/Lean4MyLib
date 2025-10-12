@@ -114,7 +114,7 @@ private def size (s : UnverifiedDirectedGraph A) : Nat := s.labels.size
 private def okKids (n : Nat) (ks : List Nat) : Bool :=
   ks.all (fun k => decide (k < n))
 
-private def freeze {A} (s : UnverifiedDirectedGraph A) : PackedDAG A :=
+private def toPackedDAG {A} (s : UnverifiedDirectedGraph A) : PackedDAG A :=
   let n := s.size
   -- kids の長さと n を突き合わせる
   if hk : s.kids.size = n then
@@ -167,8 +167,7 @@ def pushDailyU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := [])
   then pushU a ks refs
   else return ()
 
-def mkDAG {A} (prog : SSA A B) : PackedDAG A :=  (prog.run UnverifiedDirectedGraph.empty).snd |>.freeze
-
+def mkPackedDAG {A} (prog : SSA A B) : PackedDAG A :=  (prog.run UnverifiedDirectedGraph.empty).snd |>.toPackedDAG
 
 namespace PackedDAGWithFilter
 
@@ -250,7 +249,7 @@ def compress {A} [Inhabited A] (wf : PackedDAGWithFilter A) : PackedDAG A :=
           | none   => pure ()
         pure acc
 
-    { labels := newLabels, kids := newKids :UnverifiedDirectedGraph A}.freeze
+    { labels := newLabels, kids := newKids :UnverifiedDirectedGraph A}.toPackedDAG
 
 end PackedDAGWithFilter
 
