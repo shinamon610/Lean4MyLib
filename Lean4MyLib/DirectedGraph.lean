@@ -36,7 +36,6 @@ structure DAGWithFilter (A : Type) (n : Nat) where
   allow : Fin n → Bool   -- 非フィルタは `fun _ => true`
 abbrev PackedDAGWithFilter (A : Type) := Σ n, DAGWithFilter  A n
 
-
 namespace DAG
 def empty (A : Type) : DAG A 0 where
   label    i := nomatch i
@@ -100,39 +99,22 @@ instance [ToString A] [ToJson A]: ToJson (PackedDAG A) where
 end PackedDAG
 
 /- 依存を外したビルダー状態：未確定の DAG を配列で保持 -/
-private structure State (A : Type) where
+private structure UnverifiedDirectedGraph (A : Type) where
   labels : Array A
   kids   : Array (List Nat)   -- 子は「先に作られたノード」のインデックス
 deriving Inhabited
 
-private def State.empty {A} : State A :=
+namespace UnverifiedDirectedGraph
+
+private def empty {A} : UnverifiedDirectedGraph A :=
   { labels := #[], kids := #[] }
 
-private def State.size (s : State A) : Nat := s.labels.size
-
-abbrev SSA (A : Type) := StateM (State A)
+private def size (s : UnverifiedDirectedGraph A) : Nat := s.labels.size
 
 private def okKids (n : Nat) (ks : List Nat) : Bool :=
   ks.all (fun k => decide (k < n))
 
--- ノード追加用の関数
-def push {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) : SSA A Nat := do
-  let ksn <- ks.mapM id
-  let s ← get
-  let n := s.size
-  let refs_with_ks := ksn++refs
-  set { labels := s.labels.push a, kids := s.kids.push refs_with_ks :State A}
-  pure n
-
-def pushU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) : SSA A Unit := do
-  _ <- push a ks refs
-
-def pushDailyU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) (should_append:Bool): SSA A Unit := do
-  if should_append
-  then pushU a ks refs
-  else return ()
-
-private def freeze {A} (s : State A) : PackedDAG A :=
+private def freeze {A} (s : UnverifiedDirectedGraph A) : PackedDAG A :=
   let n := s.size
   -- kids の長さと n を突き合わせる
   if hk : s.kids.size = n then
@@ -154,7 +136,7 @@ private def freeze {A} (s : State A) : PackedDAG A :=
       let label : Fin n → A :=
         fun i => s.labels[i]'(by
           -- n = s.size, State.size = s.labels.size
-          simp [State.size, n])
+          simp [UnverifiedDirectedGraph.size, n])
       let kids : (i : Fin n) → List (Fin i) :=
         fun i =>
           let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
@@ -164,9 +146,31 @@ private def freeze {A} (s : State A) : PackedDAG A :=
   else
     panic! s!"internal size mismatch: labels={n}, kids={s.kids.size}"
 
-def mkDAG {A} (prog : SSA A B) : PackedDAG A :=  (prog.run State.empty).snd |> freeze
+end UnverifiedDirectedGraph
 
-namespace DAGWithFilter
+abbrev SSA (A : Type) := StateM (UnverifiedDirectedGraph A)
+
+-- ノード追加用の関数
+def push {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) : SSA A Nat := do
+  let ksn <- ks.mapM id
+  let s ← get
+  let n := s.size
+  let refs_with_ks := ksn++refs
+  set { labels := s.labels.push a, kids := s.kids.push refs_with_ks :UnverifiedDirectedGraph A}
+  pure n
+
+def pushU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) : SSA A Unit := do
+  _ <- push a ks refs
+
+def pushDailyU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := []) (should_append:Bool): SSA A Unit := do
+  if should_append
+  then pushU a ks refs
+  else return ()
+
+def mkDAG {A} (prog : SSA A B) : PackedDAG A :=  (prog.run UnverifiedDirectedGraph.empty).snd |>.freeze
+
+
+namespace PackedDAGWithFilter
 
 open DAG
 
@@ -183,7 +187,7 @@ private def buildMap (allow : Array Bool) : Array (Option Nat) × Nat :=
     pure (m, idx)
 
 /-- DAG → State コピー（証明は持たない） -/
-private def toState {A} {n} (g : DAG A n) : State A :=
+private def toState {A} {n} (g : DAG A n) : UnverifiedDirectedGraph A :=
   let labels : Array A := Array.ofFn (fun (i : Fin n) => g.label i)
   let kids   : Array (List Nat) :=
     Array.ofFn (fun (i : Fin n) => (g.kids i).map (fun c => (c : Fin i).val))
@@ -206,7 +210,7 @@ private def bypassKids (kids : Array (List Nat)) (allow : Array Bool) : Array (L
 def compress {A} [Inhabited A] (wf : PackedDAGWithFilter A) : PackedDAG A :=
   match wf with
   | ⟨n, s⟩ =>
-    let st0 : State A :=
+    let st0 : UnverifiedDirectedGraph A :=
       let labels := Array.ofFn (fun (i : Fin n) => s.base.label i)
       let kids   := Array.ofFn (fun (i : Fin n) => (s.base.kids i).map (fun c => (c : Fin i).val))
       { labels := labels, kids := kids }
@@ -246,9 +250,9 @@ def compress {A} [Inhabited A] (wf : PackedDAGWithFilter A) : PackedDAG A :=
           | none   => pure ()
         pure acc
 
-    freeze { labels := newLabels, kids := newKids }
+    { labels := newLabels, kids := newKids :UnverifiedDirectedGraph A}.freeze
 
-end DAGWithFilter
+end PackedDAGWithFilter
 
 namespace TestCompress
 
@@ -275,7 +279,7 @@ def mkWF : PackedDAGWithFilter String :=
   dag.WithFilterOf pred
 
 def run [ToJson A] [ToString A][Inhabited A](wf:PackedDAGWithFilter A) : String :=
-  let dag := compress wf
+  let dag := PackedDAGWithFilter.compress wf
   (toJson dag).pretty
 
 #eval IO.println (run mkWF)
