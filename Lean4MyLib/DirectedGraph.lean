@@ -185,6 +185,7 @@ def pushDailyU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := [])
   else return ()
 
 def mkPackedDAG {A} (prog : SSA A B) : PackedDAG A :=  (prog.run UnverifiedDirectedGraph.empty).snd |>.toPackedDAG
+def mkPackedDirectedGraph {A} (prog : SSA A B) : PackedDirectedGraph A :=  (prog.run UnverifiedDirectedGraph.empty).snd |>.toPackedDirectedGraph
 
 namespace PackedDAGWithFilter
 
