@@ -18,83 +18,84 @@ sizeは存在しないけど、定義域の濃度は等しい。
 これを証明しようとするとmathlib使わないといけなくてビルド長くなるから割愛。
 -/
 
-structure SDAG (A : Type) (n : Nat) where
+structure DAG (A : Type) (n : Nat) where
   label    : Fin n → A
   kids : (i : Fin n) → List (Fin i)
 /-
 iは、Natが要求される箇所で自動的にi.val:Natに変換されるので、kidsの戻り値の型の(Fin i)は(Fin i.val)になる。
 -/
 
-abbrev DAG (A : Type) := Σ n, SDAG A n
-abbrev filteredDAG (A : Type) := Σ n, (SDAG A n × List (Fin n))
-
-def emptySDAG (A : Type) : SDAG A 0 where
-  label    i := nomatch i
-  kids i := nomatch i
-
-def emptyDAG (A : Type) : DAG A :=
-  ⟨0, emptySDAG A⟩
-
-instance instInhabitedSigmaSDAG (A : Type) : Inhabited (DAG A) where
-  default := emptyDAG A
+-- 依存型を隠したやつ
+abbrev PackedDAG (A : Type) := Σ n, DAG A n
 
 -- filter 付きDAG
-structure SDAGWithFilter (A : Type) (n : Nat) where
-  base  : SDAG A n
+structure DAGWithFilter (A : Type) (n : Nat) where
+  base  : DAG A n
   allow : Fin n → Bool   -- 非フィルタは `fun _ => true`
-abbrev DAGWithFilter (A : Type) := Σ n, SDAGWithFilter  A n
+abbrev PackedDAGWithFilter (A : Type) := Σ n, DAGWithFilter  A n
 
 
-namespace SDAG
+namespace DAG
+def empty (A : Type) : DAG A 0 where
+  label    i := nomatch i
+  kids i := nomatch i
 
 /-- `c : Fin i` を「全体サイズ」`Fin n` に埋め込む（`c.val < i.val < n`） -/
 def coeChild {n} (i : Fin n) (c : Fin i) : Fin n :=
   ⟨c.val, Nat.lt_trans c.isLt i.isLt⟩
 
 /-- エッジ一覧 `i → j` を収集 -/
-def edges {A n} (g : SDAG A n) : List (Fin n × Fin n) :=
+def edges {A n} (g : DAG A n) : List (Fin n × Fin n) :=
    (List.finRange n).flatMap  (fun i =>
     (g.kids i).map (fun c => (i, coeChild i c)))
 
 /-- 子として登場するノードの集合（Natの値で持つ） -/
-private def childNats {A n} (g : SDAG A n) : List Nat :=
+private def childNats {A n} (g : DAG A n) : List Nat :=
   (g.edges).map (fun e => (e.snd : Fin n).val)
 
 /-- 親を持たないノード（root）だけを返す -/
-def roots {A n} (g : SDAG A n) : List (Fin n) :=
+def roots {A n} (g : DAG A n) : List (Fin n) :=
   let cs := g.childNats
   (List.finRange n).filter (fun i => !(cs.contains i.val))
 
 -- あるnodeの親全部
-def parents {A n} (g : SDAG A n) (j : Fin n) : List (Fin n) :=
+def parents {A n} (g : DAG A n) (j : Fin n) : List (Fin n) :=
   (List.finRange n).filter (fun i =>
-    (g.kids i).any (fun c => SDAG.coeChild i c == j))
+    (g.kids i).any (fun c => DAG.coeChild i c == j))
 
 -- 先祖全部
-partial def ancestors {A n} (g : SDAG A n) (j : Fin n) : List (Fin n) :=
+partial def ancestors {A n} (g : DAG A n) (j : Fin n) : List (Fin n) :=
   let ps := g.parents j
   ps ++ ps.flatMap (fun x => g.ancestors x)
-end SDAG
+end DAG
 
-def DAGWithFilter.of{A} : (d : DAG A) → (A×(Fin d.1) → Bool) → DAGWithFilter A
+namespace PackedDAG
+def empty (A : Type) : PackedDAG A :=
+  ⟨0, DAG.empty A⟩
+instance (A : Type) : Inhabited (PackedDAG A) where
+  default := empty A
+def WithFilterOf{A} : (d : PackedDAG A) → (A×(Fin d.1) → Bool) → PackedDAGWithFilter A
 | ⟨n, G⟩, pred =>
   ⟨n, { base := G, allow := fun i => pred ((G.label i), i)}⟩
 
-private partial def innerToJsonByLabel {A} [ToString A] [ToJson A] (g:SDAG A n) (i:Fin n): Json:=
+private partial def _ToJson {A} [ToString A] [ToJson A] (g:DAG A n) (i:Fin n): Json:=
   let k : String := toString (g.label i)
   let deps : List Json :=
     (g.kids i).map (fun c =>
-      let j := SDAG.coeChild i c
-      innerToJsonByLabel g j
+      let j := DAG.coeChild i c
+      _ToJson g j
       )
   let base:= toJson (g.label i)
   mkObj [ (k, base.mergeObj (mkObj [("1deps", Json.arr deps.toArray)]))] -- sort順指定のために 1を入れている
 
-def toJsonByLabel {A} [ToString A] [ToJson A] :DAG A -> Json
-| ⟨_ , g⟩ =>
-  let roots := (SDAG.roots g)
-  let entries : List Json := roots.map (innerToJsonByLabel g)
-  Json.arr entries.toArray
+instance [ToString A] [ToJson A]: ToJson (PackedDAG A) where
+  toJson
+  | ⟨_ , g⟩ =>
+    let roots := (DAG.roots g)
+    let entries : List Json := roots.map (_ToJson g)
+    Json.arr entries.toArray
+
+end PackedDAG
 
 /- 依存を外したビルダー状態：未確定の DAG を配列で保持 -/
 private structure State (A : Type) where
@@ -129,7 +130,7 @@ def pushDailyU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := [])
   then pushU a ks refs
   else return ()
 
-private def freeze {A} (s : State A) : DAG A :=
+private def freeze {A} (s : State A) : PackedDAG A :=
   let n := s.size
   -- kids の長さと n を突き合わせる
   if hk : s.kids.size = n then
@@ -147,7 +148,7 @@ private def freeze {A} (s : State A) : DAG A :=
     match bad? with
     | some i => panic! s!"invalid child index at node {i.val}"
     | none   =>
-      -- SDAG 構築
+      -- DAG 構築
       let label : Fin n → A :=
         fun i => s.labels[i]'(by
           -- n = s.size, State.size = s.labels.size
@@ -161,11 +162,11 @@ private def freeze {A} (s : State A) : DAG A :=
   else
     panic! s!"internal size mismatch: labels={n}, kids={s.kids.size}"
 
-def mkDAG {A} (prog : SSA A B) : DAG A :=  (prog.run State.empty).snd |> freeze
+def mkDAG {A} (prog : SSA A B) : PackedDAG A :=  (prog.run State.empty).snd |> freeze
 
 namespace DAGWithFilter
 
-open SDAG
+open DAG
 
 /-- allow配列から old→new を作る（許可のみ連番） -/
 private def buildMap (allow : Array Bool) : Array (Option Nat) × Nat :=
@@ -179,8 +180,8 @@ private def buildMap (allow : Array Bool) : Array (Option Nat) × Nat :=
         m := m.push none
     pure (m, idx)
 
-/-- SDAG → State コピー（証明は持たない） -/
-private def toState {A} {n} (g : SDAG A n) : State A :=
+/-- DAG → State コピー（証明は持たない） -/
+private def toState {A} {n} (g : DAG A n) : State A :=
   let labels : Array A := Array.ofFn (fun (i : Fin n) => g.label i)
   let kids   : Array (List Nat) :=
     Array.ofFn (fun (i : Fin n) => (g.kids i).map (fun c => (c : Fin i).val))
@@ -200,7 +201,7 @@ private def bypassKids (kids : Array (List Nat)) (allow : Array Bool) : Array (L
     pure dp
 
 /-- State 上で圧縮を完了し，最後に freeze で DAG へ戻す -/
-def compress {A} [Inhabited A] (wf : DAGWithFilter A) : DAG A :=
+def compress {A} [Inhabited A] (wf : PackedDAGWithFilter A) : PackedDAG A :=
   match wf with
   | ⟨n, s⟩ =>
     let st0 : State A :=
@@ -249,10 +250,10 @@ end DAGWithFilter
 
 namespace TestCompress
 
-open SDAG
+open DAG
 open DAGWithFilter
 
-def tinySDAG : SDAG String 5 where
+def tinyDAG : DAG String 5 where
   label
     | ⟨0, _⟩ => "C"
     | ⟨1, _⟩ => "E"
@@ -266,14 +267,14 @@ def tinySDAG : SDAG String 5 where
     | ⟨3, _⟩ => [⟨2, by simp⟩]
     | ⟨4, _⟩ => [⟨2, by simp⟩]
 
-def mkWF : DAGWithFilter String :=
-  let dag := ⟨5, tinySDAG⟩
+def mkWF : PackedDAGWithFilter String :=
+  let dag:PackedDAG _ := ⟨5, tinyDAG⟩
   let pred:= fun (_, i) => i != 2 && i != 3
-  DAGWithFilter.of dag pred
+  dag.WithFilterOf pred
 
-def run [ToJson A] [ToString A][Inhabited A](wf:DAGWithFilter A) : String :=
+def run [ToJson A] [ToString A][Inhabited A](wf:PackedDAGWithFilter A) : String :=
   let dag := compress wf
-  (toJsonByLabel dag).pretty
+  (toJson dag).pretty
 
 #eval IO.println (run mkWF)
 
