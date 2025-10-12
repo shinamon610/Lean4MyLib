@@ -8,9 +8,22 @@ open Std
 open Std.Time
 open Lean Meta
 
+structure DirectedGraph (A : Type) (n : Nat) where
+  label: Fin n → A
+  kids : (Fin n) → List (Fin n)
+/-
+label.size=kids.sizeである。
+なぜなら、lean4ではすべての関数は全域関数であり、Fin nはそのすべての要素について定義されていなければならないから。
+sizeは存在しないけど、定義域の濃度は等しい。
+これを証明しようとするとmathlib使わないといけなくてビルド長くなるから割愛。
+-/
+
 structure SDAG (A : Type) (n : Nat) where
   label    : Fin n → A
   kids : (i : Fin n) → List (Fin i)
+/-
+iは、Natが要求される箇所で自動的にi.val:Natに変換されるので、kidsの戻り値の型の(Fin i)は(Fin i.val)になる。
+-/
 
 abbrev DAG (A : Type) := Σ n, SDAG A n
 abbrev filteredDAG (A : Type) := Σ n, (SDAG A n × List (Fin n))
