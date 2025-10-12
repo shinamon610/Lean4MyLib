@@ -10,14 +10,14 @@ open Lean Meta
 
 structure SDAG (A : Type) (n : Nat) where
   label    : Fin n → A
-  children : (i : Fin n) → List (Fin i)
+  kids : (i : Fin n) → List (Fin i)
 
 abbrev DAG (A : Type) := Σ n, SDAG A n
 abbrev filteredDAG (A : Type) := Σ n, (SDAG A n × List (Fin n))
 
 def emptySDAG (A : Type) : SDAG A 0 where
   label    i := nomatch i
-  children i := nomatch i
+  kids i := nomatch i
 
 def emptyDAG (A : Type) : DAG A :=
   ⟨0, emptySDAG A⟩
@@ -41,7 +41,7 @@ def coeChild {n} (i : Fin n) (c : Fin i) : Fin n :=
 /-- エッジ一覧 `i → j` を収集 -/
 def edges {A n} (g : SDAG A n) : List (Fin n × Fin n) :=
    (List.finRange n).flatMap  (fun i =>
-    (g.children i).map (fun c => (i, coeChild i c)))
+    (g.kids i).map (fun c => (i, coeChild i c)))
 
 /-- 子として登場するノードの集合（Natの値で持つ） -/
 private def childNats {A n} (g : SDAG A n) : List Nat :=
@@ -55,7 +55,7 @@ def roots {A n} (g : SDAG A n) : List (Fin n) :=
 -- あるnodeの親全部
 def parents {A n} (g : SDAG A n) (j : Fin n) : List (Fin n) :=
   (List.finRange n).filter (fun i =>
-    (g.children i).any (fun c => SDAG.coeChild i c == j))
+    (g.kids i).any (fun c => SDAG.coeChild i c == j))
 
 -- 先祖全部
 partial def ancestors {A n} (g : SDAG A n) (j : Fin n) : List (Fin n) :=
@@ -70,7 +70,7 @@ def DAGWithFilter.of{A} : (d : DAG A) → (A×(Fin d.1) → Bool) → DAGWithFil
 private partial def innerToJsonByLabel {A} [ToString A] [ToJson A] (g:SDAG A n) (i:Fin n): Json:=
   let k : String := toString (g.label i)
   let deps : List Json :=
-    (g.children i).map (fun c =>
+    (g.kids i).map (fun c =>
       let j := SDAG.coeChild i c
       innerToJsonByLabel g j
       )
@@ -139,12 +139,12 @@ private def freeze {A} (s : State A) : DAG A :=
         fun i => s.labels[i]'(by
           -- n = s.size, State.size = s.labels.size
           simp [State.size, n])
-      let children : (i : Fin n) → List (Fin i) :=
+      let kids : (i : Fin n) → List (Fin i) :=
         fun i =>
           let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
           raw.filterMap (fun k =>
             if hki : k < i.val then some ⟨k, hki⟩ else none)
-      ⟨n, { label, children }⟩
+      ⟨n, { label, kids }⟩
   else
     panic! s!"internal size mismatch: labels={n}, kids={s.kids.size}"
 
@@ -170,7 +170,7 @@ private def buildMap (allow : Array Bool) : Array (Option Nat) × Nat :=
 private def toState {A} {n} (g : SDAG A n) : State A :=
   let labels : Array A := Array.ofFn (fun (i : Fin n) => g.label i)
   let kids   : Array (List Nat) :=
-    Array.ofFn (fun (i : Fin n) => (g.children i).map (fun c => (c : Fin i).val))
+    Array.ofFn (fun (i : Fin n) => (g.kids i).map (fun c => (c : Fin i).val))
   { labels := labels, kids := kids }
 
 /-- 不許可ノードを通過して，子を許可ノードに張り替える（多段通過も一発） -/
@@ -192,7 +192,7 @@ def compress {A} [Inhabited A] (wf : DAGWithFilter A) : DAG A :=
   | ⟨n, s⟩ =>
     let st0 : State A :=
       let labels := Array.ofFn (fun (i : Fin n) => s.base.label i)
-      let kids   := Array.ofFn (fun (i : Fin n) => (s.base.children i).map (fun c => (c : Fin i).val))
+      let kids   := Array.ofFn (fun (i : Fin n) => (s.base.kids i).map (fun c => (c : Fin i).val))
       { labels := labels, kids := kids }
 
     let allow : Array Bool := Array.ofFn (fun (i : Fin n) => s.allow i)
@@ -246,7 +246,7 @@ def tinySDAG : SDAG String 5 where
     | ⟨2, _⟩ => "B"
     | ⟨3, _⟩ => "A"
     | ⟨4, _⟩ => "D"
-  children
+  kids
     | ⟨0, _⟩ => []
     | ⟨1, _⟩ => []
     | ⟨2, _⟩ => [⟨0, by simp⟩,⟨1, by simp⟩]
