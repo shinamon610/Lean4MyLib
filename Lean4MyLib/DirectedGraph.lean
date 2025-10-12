@@ -130,31 +130,18 @@ private def toPackedDAG {A} (s : UnverifiedDirectedGraph A) : PackedDAG A :=
   let n := s.size
   -- kids の長さと n を突き合わせる
   if hk : s.kids.size = n then
-    -- まず全ノードについて「子 < 親」を一括検証。壊れていれば即エラー。
-    let bad? : Option (Fin n) :=
-      Id.run do
-        let mut bad : Option (Fin n) := none
-        -- ここがポイント: Nat ではなく Fin n を回す
-        for i in List.finRange n do
-          -- kids へのインデックスは Fin (kids.size) が必要。hk の対称でキャスト。
-          let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
-          if ! okKids i.val raw then
-            bad := some i
-        pure bad
-    match bad? with
-    | some i => panic! s!"invalid child index at node {i.val}"
-    | none   =>
-      -- DAG 構築
-      let label : Fin n → A :=
-        fun i => s.labels[i]'(by
-          -- n = s.size, State.size = s.labels.size
-          simp [UnverifiedDirectedGraph.size, n])
-      let kids : (i : Fin n) → List (Fin i) :=
-        fun i =>
-          let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
-          raw.filterMap (fun k =>
-            if hki : k < i.val then some ⟨k, hki⟩ else none)
-      ⟨n, { label, kids }⟩
+    let label : Fin n → A :=
+      fun i => s.labels[i]'(by
+        -- n = s.size, State.size = s.labels.size
+        simp [UnverifiedDirectedGraph.size, n])
+    let kids : (i : Fin n) → List (Fin i) :=
+      fun i =>
+        let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
+        raw.filterMap (fun k =>
+          if hki : k < i.val
+          then some ⟨k, hki⟩
+          else (panic! s!"invalid child index at node {i.val}: {k}")) -- panicは勝手にnoneになるので、実質ここはnone
+    ⟨n, { label, kids }⟩
   else
     panic! s!"internal size mismatch: labels={n}, kids={s.kids.size}"
 
@@ -162,28 +149,20 @@ private def toPackedDirectedGraph {A} (s : UnverifiedDirectedGraph A) : PackedDi
   let n := s.size
   -- kids の長さと n を突き合わせる
   if hk : s.kids.size = n then
-    let bad? : Option (Fin n) :=
-      Id.run do
-        let mut bad : Option (Fin n) := none
-        for i in List.finRange n do
-          let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
-          if ! okKids n raw then
-            bad := some i
-        pure bad
-    match bad? with
-    | some i => panic! s!"invalid child index at node {i.val}"
-    | none =>
-      -- DirectedGraph 構築
-      let label : Fin n → A :=
-        fun i => s.labels[i]'(by
-          simp [UnverifiedDirectedGraph.size, n])
-      let kids : (i : Fin n) → List (Fin n) := fun i =>
-        let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
-        raw.filterMap (fun k =>
-        if hkn : k < n then some ⟨k, hkn⟩ else none)
-      ⟨n, { label, kids }⟩
+    -- DirectedGraph 構築
+    let label : Fin n → A :=
+      fun i => s.labels[i]'(by
+        simp [UnverifiedDirectedGraph.size, n])
+    let kids : (i : Fin n) → List (Fin n) := fun i =>
+      let raw : List Nat := s.kids[(Fin.cast (by simpa using hk.symm) i)]
+      raw.filterMap (fun k =>
+        if hkn : k < n
+        then some ⟨k, hkn⟩
+        else (panic! s!"invalid child index at node {i.val}: {k}"))
+    ⟨n, { label, kids }⟩
   else
     panic! s!"internal size mismatch: labels={n}, kids={s.kids.size}"
+
 end UnverifiedDirectedGraph
 
 abbrev SSA (A : Type) := StateM (UnverifiedDirectedGraph A)
