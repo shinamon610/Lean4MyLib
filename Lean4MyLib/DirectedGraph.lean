@@ -184,6 +184,15 @@ def pushDailyU {A} (a : A) (ks : List (SSA A Nat) := []) (refs:  List Nat := [])
   then pushU a ks refs
   else return ()
 
+/-
+pushだけ使っていれば、DAGを壊さない。
+addKidsを使うと、DAGを壊す可能性がある。
+-/
+def addKids (parent_index:Nat) (kids_index:Nat):SSA A Unit := do
+  let s <-get
+  let new_kids := s.kids.set! parent_index (s.kids[parent_index]!++[kids_index])
+  set {labels:=s.labels, kids:=new_kids : UnverifiedDirectedGraph A}
+
 def mkPackedDAG {A} (prog : SSA A B) : PackedDAG A :=  (prog.run UnverifiedDirectedGraph.empty).snd |>.toPackedDAG
 def mkPackedDirectedGraph {A} (prog : SSA A B) : PackedDirectedGraph A :=  (prog.run UnverifiedDirectedGraph.empty).snd |>.toPackedDirectedGraph
 
