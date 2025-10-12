@@ -16,6 +16,8 @@ label.size=kids.sizeである。
 なぜなら、lean4ではすべての関数は全域関数であり、Fin nはそのすべての要素について定義されていなければならないから。
 sizeは存在しないけど、定義域の濃度は等しい。
 これを証明しようとするとmathlib使わないといけなくてビルド長くなるから割愛。
+
+また、これがlabelとかkidsにArrayを使っていない理由でもある。単なるArrayだとその間の要素に空きがある可能性が発生する。
 -/
 
 structure DAG (A : Type) (n : Nat) where
